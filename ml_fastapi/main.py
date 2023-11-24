@@ -103,7 +103,7 @@ text4='Директору ГБОУ «Школа № 1527» Кадыковой Е
 
 
 @app.post("/product_single")
-def product_single(text: str = Query(text4)) -> Dict:
+def product_single(text: Text=Text(text=text4)) -> Dict:
     """Эндпойнт FastApi для выдачи предсказаний по тексту
 
     Args:
@@ -112,12 +112,12 @@ def product_single(text: str = Query(text4)) -> Dict:
     Returns:
         Dict: словарик с предсказанием
     """
-    input_text = [text]
+    input_text = [text.text]
     outputs = predict_catboost(input_text)
     return outputs
 
 @app.post("/product_ner")
-def product_ner(text: str = Query(text4)) -> Dict:
+def product_ner(text: Text=Text(text=text4)) -> Dict:
     """Эндпойнт FastApi для выдачи NER
 
     Args:
@@ -126,6 +126,6 @@ def product_ner(text: str = Query(text4)) -> Dict:
     Returns:
         Html: разметка
     """
-    input_text = text
+    input_text = text.text
     outputs = get_ner_format(input_text)
     return {"ner": outputs}
