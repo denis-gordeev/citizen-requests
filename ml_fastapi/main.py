@@ -9,7 +9,7 @@ import __mp_main__
 import numpy as np
 import pandas as pd
 from catboost import Pool
-from fastapi import FastAPI
+from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pydantic import BaseModel
@@ -99,9 +99,11 @@ def predict_catboost(input_text: list[str], add_setfit=True):
         outputs[col] = {"tag": tag, "proba": round(float(proba), 2)}
     return outputs
 
+text4='Директору ГБОУ «Школа № 1527» Кадыковой Елене Владимировне KadykovaEV@edu.mos.ru , 1527@edu.mos.ru Адрес: 115470, г.Москва, пр-кт Андропова, дом 17, корпус 5. Копия: в Южное окружное управление департамента образования города Москвы Адрес: г.Москва, Высокая улица, 14.        от Родителей учеников 6 «В» класса,) указанных ниже в подписях КОЛЛЕКТИВНАЯ ЖАЛОБА Уважаемая Елена Владимировна! С «19» октября 2020 года, с началом введения дистанционного обучения в системе МЭШ для 6-11 классов в связи с эпидемией COVID-19, наши дети, ученики 6 &quot;В&quot; класса не могут ежедневно подключиться к одному или нескольким урокам.'
+
 
 @app.post("/product_single")
-def product_single(text: Text) -> Dict:
+def product_single(text: str = Query(text4)) -> Dict:
     """Эндпойнт FastApi для выдачи предсказаний по тексту
 
     Args:
@@ -110,12 +112,12 @@ def product_single(text: Text) -> Dict:
     Returns:
         Dict: словарик с предсказанием
     """
-    input_text = [text.text]
+    input_text = [text]
     outputs = predict_catboost(input_text)
     return outputs
 
 @app.post("/product_ner")
-def product_single(text: Text) -> Text:
+def product_ner(text: str = Query(text4)) -> Dict:
     """Эндпойнт FastApi для выдачи NER
 
     Args:
@@ -124,6 +126,6 @@ def product_single(text: Text) -> Text:
     Returns:
         Html: разметка
     """
-    input_text = [text.text]
+    input_text = text
     outputs = get_ner_format(input_text)
-    return outputs
+    return {"ner": outputs}

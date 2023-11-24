@@ -7,11 +7,13 @@ from natasha import (
 
 from ipymarkup import format_span_box_markup
 
-def get_ner_format(text):
-    emb = NewsEmbedding()
-    ner_tagger = NewsNERTagger(emb)
-    segmenter = Segmenter()
 
+emb = NewsEmbedding()
+ner_tagger = NewsNERTagger(emb)
+segmenter = Segmenter()
+
+
+def get_ner_format(text):
     doc = Doc(text)
     doc.segment(segmenter)
     doc.tag_ner(ner_tagger)
