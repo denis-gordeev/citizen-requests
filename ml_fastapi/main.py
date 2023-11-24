@@ -10,9 +10,10 @@ import numpy as np
 import pandas as pd
 from catboost import Pool
 from fastapi import FastAPI
-from pydantic import BaseModel
-from loguru import logger
 from fastapi.middleware.cors import CORSMiddleware
+from loguru import logger
+from pydantic import BaseModel
+from setfit import SetFitModel
 
 # from utils import Tokenize
 
@@ -23,12 +24,15 @@ from fastapi.middleware.cors import CORSMiddleware
 # __mp_main__.Tokenize = Tokenize
 
 logger.add(
-    "./logs/log.log", rotation="50 MB", retention=5,
+    "./logs/log.log",
+    rotation="50 MB",
+    retention=5,
 )
 
 
 class Text(BaseModel):
     text: str = ""
+
 
 HF_TOKEN = os.environ.get("HF_TOKEN")
 
@@ -44,6 +48,18 @@ app.add_middleware(
 
 columns = ["Исполнитель", "Группа тем", "Тема"]
 
+setfit_model_names = {
+    "Группа тем": "denis-gordeev/citizen-request-theme-group",
+    "Тема": "denis-gordeev/citizen-request-theme",
+}
+
+setfit_models = dict()
+for model_name, hf_path in setfit_model_names.items():
+    model = SetFitModel.from_pretrained(hf_path, use_auth_token=HF_TOKEN)
+    with open(f"setfit_classes_{model_name}.json") as f:
+        classes = json.load(f)
+    setfit_models[model_name] = {"model": model, "classes": classes}
+
 models = dict()
 for col in columns:
     filename = f"catboost_{col}.pcl"
@@ -53,18 +69,24 @@ for col in columns:
         models[col] = pickle.load(f)
 
 
-def predict_catboost(input_text):
+def predict_catboost(input_text: list[str], add_setfit=True):
     with open("group_to_themes.json") as f:
         group_to_themes = json.load(f)
     outputs = dict()
     prev_tag = None
     for col, model in models.items():
         probas = model.predict_proba(input_text)
+        if add_setfit and col in setfit_models:
+            setfit_model = setfit_models[col]["model"]
+            setfit_classes = setfit_models[col]["classes"]
+            setfit_preds = setfit_model.predict_proba(input_text).cpu().detach().numpy()[0]
+            setfit_proba = np.array([setfit_preds[setfit_classes[cl]] for cl in model.classes_])
+            probas += setfit_proba
         if col == "Тема":
-           allowed_tags = set(group_to_themes[prev_tag])
-           for ci, c in enumerate(model.classes_):
-               if c not in allowed_tags:
-                   probas[ci] = -1000
+            allowed_tags = set(group_to_themes[prev_tag])
+            for ci, c in enumerate(model.classes_):
+                if c not in allowed_tags:
+                    probas[ci] = -1000
         max_tag_id = np.argmax(probas)
         tag = model.classes_[max_tag_id]
         prev_tag = tag
