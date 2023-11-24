@@ -1,4 +1,5 @@
 # not used explicitly; but if not improted causes issues with __mp_main__
+import json
 import multiprocessing
 import os
 import pickle
@@ -29,6 +30,7 @@ logger.add(
 class Text(BaseModel):
     text: str = ""
 
+HF_TOKEN = os.environ.get("HF_TOKEN")
 
 app = FastAPI()
 
@@ -50,6 +52,27 @@ for col in columns:
     with open(filename, "rb") as f:
         models[col] = pickle.load(f)
 
+
+def predict_catboost(input_text):
+    with open("group_to_themes.json") as f:
+        group_to_themes = json.load(f)
+    outputs = dict()
+    prev_tag = None
+    for col, model in models.items():
+        probas = model.predict_proba(input_text)
+        if col == "Тема":
+           allowed_tags = set(group_to_themes[prev_tag])
+           for ci, c in enumerate(model.classes_):
+               if c not in allowed_tags:
+                   probas[ci] = -1000
+        max_tag_id = np.argmax(probas)
+        tag = model.classes_[max_tag_id]
+        prev_tag = tag
+        proba = np.max(probas)
+        outputs[col] = {"tag": tag, "proba": round(float(proba), 2)}
+    return outputs
+
+
 @app.post("/product_single")
 def product_single(text: Text) -> Dict:
     """Эндпойнт FastApi для выдачи предсказаний по тексту
@@ -60,10 +83,6 @@ def product_single(text: Text) -> Dict:
     Returns:
         Dict: словарик с предсказанием
     """
-    outputs = dict()
     input_text = [text.text]
-    for col, model in models.items():
-        tag = model.predict(input_text)[0]
-        proba = model.predict_proba(input_text)[0]
-        outputs[col] = {"tag": tag, "proba": round(float(proba), 2)}
+    outputs = predict_catboost(input_text)
     return outputs
