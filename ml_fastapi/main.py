@@ -15,6 +15,10 @@ from loguru import logger
 from pydantic import BaseModel
 from setfit import SetFitModel
 
+from claim_ner import get_ner_format
+
+
+
 # from utils import Tokenize
 
 # uvicorn использует multiprocessing
@@ -108,4 +112,18 @@ def product_single(text: Text) -> Dict:
     """
     input_text = [text.text]
     outputs = predict_catboost(input_text)
+    return outputs
+
+@app.post("/product_ner")
+def product_single(text: Text) -> Text:
+    """Эндпойнт FastApi для выдачи NER
+
+    Args:
+        text (Text): текст документа
+
+    Returns:
+        Html: разметка
+    """
+    input_text = [text.text]
+    outputs = get_ner_format(input_text)
     return outputs
