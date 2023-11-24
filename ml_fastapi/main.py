@@ -53,6 +53,7 @@ app.add_middleware(
 columns = ["Исполнитель", "Группа тем", "Тема"]
 
 setfit_model_names = {
+    "Исполнитель": "denis-gordeev/citizen-request-performer",
     "Группа тем": "denis-gordeev/citizen-request-theme-group",
     "Тема": "denis-gordeev/citizen-request-theme",
 }
