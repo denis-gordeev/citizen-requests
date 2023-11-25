@@ -113,7 +113,7 @@ def predict_catboost(input_text: list[str], add_setfit=True):
     for col, model in models.items():
         probas = model.predict_proba(input_text)
         if col == "Группа тем":
-            bert_probas = inference(group_roberta_model, input_text)
+            bert_probas = inference(group_roberta_model, input_text[0])
             bert_probas = [bert_probas[bert_classes[c]] for c in model.classes_]
             bert_probas = np.array(bert_probas)
             probas += bert_probas
