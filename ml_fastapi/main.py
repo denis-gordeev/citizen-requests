@@ -86,8 +86,13 @@ def predict_catboost(input_text: list[str], add_setfit=True):
             setfit_classes = setfit_models[col]["classes"]
             setfit_preds = setfit_model.predict_proba(input_text).cpu().detach().numpy()[0]
             setfit_proba = np.array([setfit_preds[setfit_classes[cl]] for cl in model.classes_])
-            probas += setfit_proba
-            probas /= 2
+            # do not use catboost for Тема
+            # standalone SetFit is better here
+            if col == "Тема":
+                probas = setfit_proba
+            else:
+                probas += setfit_proba
+                probas /= 2
         if col == "Тема":
             allowed_tags = set(group_to_themes[prev_tag])
             for ci, c in enumerate(model.classes_):
