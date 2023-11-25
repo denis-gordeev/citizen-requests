@@ -10,7 +10,10 @@ import numpy as np
 import pandas as pd
 import torch
 from catboost import Pool
+
 from claim_ner import get_ner_format
+from claim_letter import giga_letter
+
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
@@ -62,6 +65,10 @@ logger.add(
 class Text(BaseModel):
     text: str = ""
 
+class Request(BaseModel):
+    incident: str = ''
+    subject: str = ''
+    person: str = ''
 
 HF_TOKEN = os.environ.get("HF_TOKEN")
 
@@ -174,3 +181,9 @@ def product_ner(text: Text = Text(text=text4)) -> Dict:
     input_text = text.text
     outputs = get_ner_format(input_text)
     return {"ner": outputs}
+
+
+@app.post("/product_letter")
+def product_letter(req: Request = Request()) -> Dict:
+    outputs = giga_letter(req.incident, req.subject, req.person)
+    return {"letter": outputs}
