@@ -8,24 +8,49 @@ from typing import Dict, List, Optional, Union
 import __mp_main__
 import numpy as np
 import pandas as pd
+import torch
 from catboost import Pool
+from claim_ner import get_ner_format
 from fastapi import FastAPI, Query
 from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 from pydantic import BaseModel
 from setfit import SetFitModel
+from torch import nn
+from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from claim_ner import get_ner_format
+sigmoid = nn.Sigmoid()
 
 
+with open("theme_group_label_encoder.pcl", "rb") as f:
+    bert_label_encoder = pickle.load(f)
 
-# from utils import Tokenize
+bert_classes = {c: ci for ci, c in enumerate(bert_label_encoder.classes_)}
 
-# uvicorn использует multiprocessing
-# pickle ругается, если в Tokenize не в __mp_main__.Tokenize
-# https://stackoverflow.com/questions/62953477
-# fastapi-could-not-find-model-defintion-when-run-with-uvicorn
-# __mp_main__.Tokenize = Tokenize
+
+def inference(model, message, **kwargs):
+    input_ids, attention_mask = tokenize(message, **kwargs)
+    preds = model(input_ids, attention_mask)
+    logits = sigmoid(preds["logits"])[0].cpu().detach().numpy()
+    return logits
+
+
+def tokenize(message, device="cuda", **kwargs):
+    text_enc = tokenizer.encode_plus(
+        message,
+        None,
+        add_special_tokens=True,
+        max_length=256,
+        padding="max_length",
+        return_token_type_ids=False,
+        return_attention_mask=True,
+        truncation=True,
+        return_tensors="np",
+    )
+    input_ids = torch.tensor(text_enc["input_ids"], dtype=torch.long).to(device)
+    attention_mask = torch.tensor(text_enc["attention_mask"], dtype=torch.long).to(device)
+    return input_ids, attention_mask
+
 
 logger.add(
     "./logs/log.log",
@@ -49,6 +74,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+tokenizer = AutoTokenizer.from_pretrained("xlm-roberta-base", problem_type="single_label_classification")
+
+group_roberta_model = AutoModelForSequenceClassification.from_pretrained(
+    "denis-gordeev/xlm-roberta-base-theme-group", problem_type="single_label_classification", use_auth_token=HF_TOKEN
+).to("cuda")
 
 columns = ["Исполнитель", "Группа тем", "Тема"]
 
@@ -81,6 +112,12 @@ def predict_catboost(input_text: list[str], add_setfit=True):
     prev_tag = None
     for col, model in models.items():
         probas = model.predict_proba(input_text)
+        if col == "Группа тем":
+            bert_probas = inference(group_roberta_model, input_text)
+            bert_probas = [bert_probas[bert_classes[c]] for c in model.classes_]
+            bert_probas = np.array(bert_probas)
+            probas += bert_probas
+            probas /= 2
         if add_setfit and col in setfit_models:
             setfit_model = setfit_models[col]["model"]
             setfit_classes = setfit_models[col]["classes"]
@@ -93,7 +130,7 @@ def predict_catboost(input_text: list[str], add_setfit=True):
             else:
                 probas += setfit_proba
                 probas /= 2
-        #if col == "Тема":
+        # if col == "Тема":
         #    allowed_tags = set(group_to_themes[prev_tag])
         #    for ci, c in enumerate(model.classes_):
         #        if c not in allowed_tags:
@@ -105,11 +142,12 @@ def predict_catboost(input_text: list[str], add_setfit=True):
         outputs[col] = {"tag": tag, "proba": round(float(proba), 2)}
     return outputs
 
-text4='Директору ГБОУ «Школа № 1527» Кадыковой Елене Владимировне KadykovaEV@edu.mos.ru , 1527@edu.mos.ru Адрес: 115470, г.Москва, пр-кт Андропова, дом 17, корпус 5. Копия: в Южное окружное управление департамента образования города Москвы Адрес: г.Москва, Высокая улица, 14.        от Родителей учеников 6 «В» класса,) указанных ниже в подписях КОЛЛЕКТИВНАЯ ЖАЛОБА Уважаемая Елена Владимировна! С «19» октября 2020 года, с началом введения дистанционного обучения в системе МЭШ для 6-11 классов в связи с эпидемией COVID-19, наши дети, ученики 6 &quot;В&quot; класса не могут ежедневно подключиться к одному или нескольким урокам.'
+
+text4 = "Директору ГБОУ «Школа № 1527» Кадыковой Елене Владимировне KadykovaEV@edu.mos.ru , 1527@edu.mos.ru Адрес: 115470, г.Москва, пр-кт Андропова, дом 17, корпус 5. Копия: в Южное окружное управление департамента образования города Москвы Адрес: г.Москва, Высокая улица, 14.        от Родителей учеников 6 «В» класса,) указанных ниже в подписях КОЛЛЕКТИВНАЯ ЖАЛОБА Уважаемая Елена Владимировна! С «19» октября 2020 года, с началом введения дистанционного обучения в системе МЭШ для 6-11 классов в связи с эпидемией COVID-19, наши дети, ученики 6 &quot;В&quot; класса не могут ежедневно подключиться к одному или нескольким урокам."
 
 
 @app.post("/product_single")
-def product_single(text: Text=Text(text=text4)) -> Dict:
+def product_single(text: Text = Text(text=text4)) -> Dict:
     """Эндпойнт FastApi для выдачи предсказаний по тексту
 
     Args:
@@ -122,8 +160,9 @@ def product_single(text: Text=Text(text=text4)) -> Dict:
     outputs = predict_catboost(input_text)
     return outputs
 
+
 @app.post("/product_ner")
-def product_ner(text: Text=Text(text=text4)) -> Dict:
+def product_ner(text: Text = Text(text=text4)) -> Dict:
     """Эндпойнт FastApi для выдачи NER
 
     Args:
