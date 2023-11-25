@@ -116,8 +116,9 @@ def predict_catboost(input_text: list[str], add_setfit=True):
             bert_probas = inference(group_roberta_model, input_text[0])
             bert_probas = [bert_probas[bert_classes[c]] for c in model.classes_]
             bert_probas = np.array(bert_probas)
-            probas += bert_probas
-            probas /= 2
+            probas = bert_probas
+            # probas += bert_probas
+            # probas /= 2
         if add_setfit and col in setfit_models:
             setfit_model = setfit_models[col]["model"]
             setfit_classes = setfit_models[col]["classes"]
