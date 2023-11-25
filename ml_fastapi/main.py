@@ -93,11 +93,11 @@ def predict_catboost(input_text: list[str], add_setfit=True):
             else:
                 probas += setfit_proba
                 probas /= 2
-        if col == "Тема":
-            allowed_tags = set(group_to_themes[prev_tag])
-            for ci, c in enumerate(model.classes_):
-                if c not in allowed_tags:
-                    probas[ci] = -1000
+        #if col == "Тема":
+        #    allowed_tags = set(group_to_themes[prev_tag])
+        #    for ci, c in enumerate(model.classes_):
+        #        if c not in allowed_tags:
+        #            probas[ci] = -1000
         max_tag_id = np.argmax(probas)
         tag = model.classes_[max_tag_id]
         prev_tag = tag
